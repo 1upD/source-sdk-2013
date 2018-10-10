@@ -36,6 +36,12 @@ public:
 	virtual bool	WeaponShouldBeLowered( void );
 
 			bool	CanLower();
+
+#ifdef VANCE
+			bool	CanSprint();
+			bool	CanWalkBob();
+#endif
+
 	virtual bool	Ready( void );
 	virtual bool	Lower( void );
 	virtual bool	Deploy( void );
@@ -61,6 +67,10 @@ protected:
 	bool			m_bLowered;			// Whether the viewmodel is raised or lowered
 	float			m_flRaiseTime;		// If lowered, the time we should raise the viewmodel
 	float			m_flHolsterTime;	// When the weapon was holstered
+
+#ifdef VANCE
+	float			m_flNextFidgetTime;
+#endif
 };
 
 #endif // BASEHLCOMBATWEAPON_SHARED_H

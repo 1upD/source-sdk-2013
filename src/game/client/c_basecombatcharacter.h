@@ -32,7 +32,7 @@ public:
 
 					C_BaseCombatCharacter( void );
 	virtual			~C_BaseCombatCharacter( void );
-
+	
 	virtual void	OnPreDataChanged( DataUpdateType_t updateType );
 	virtual void	OnDataChanged( DataUpdateType_t updateType );
 
@@ -94,6 +94,10 @@ public:
 
 	virtual void		DoMuzzleFlash();
 
+#ifdef VANCE
+	CHandle< C_BaseCombatWeapon > m_hActiveWeapon;
+#endif
+
 #ifdef GLOWS_ENABLE
 	CGlowObject			*GetGlowObject( void ){ return m_pGlowEffect; }
 	virtual void		GetGlowEffectColor( float *r, float *g, float *b );
@@ -118,7 +122,11 @@ private:
 	CNetworkArray( int, m_iAmmo, MAX_AMMO_TYPES );
 
 	CHandle<C_BaseCombatWeapon>		m_hMyWeapons[MAX_WEAPONS];
+#ifndef VANCE
 	CHandle< C_BaseCombatWeapon > m_hActiveWeapon;
+#else
+	friend class C_ShowWeapon; // This allows CShowWeapon to access whatever it needs to update for the character
+#endif
 
 #ifdef GLOWS_ENABLE
 	bool				m_bGlowEnabled;

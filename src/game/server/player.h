@@ -258,6 +258,10 @@ public:
 
 	virtual void			UpdateOnRemove( void );
 
+#ifdef VANCE
+	bool IsSpawning()		{ return m_bSpawning; }
+#endif
+
 	static CBasePlayer		*CreatePlayer( const char *className, edict_t *ed );
 
 	virtual void			CreateViewModel( int viewmodelindex = 0 );
@@ -897,6 +901,10 @@ private:
 	Activity				m_Activity;
 
 protected:
+
+#ifdef VANCE
+	bool					m_bSpawning;
+#endif
 
 	void					CalcPlayerView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void					CalcVehicleView( IServerVehicle *pVehicle, Vector& eyeOrigin, QAngle& eyeAngles, 	

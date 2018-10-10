@@ -301,6 +301,92 @@ void CBaseCombatWeapon::Precache( void )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose:
+//-----------------------------------------------------------------------------
+#ifdef CLIENT_DLL
+#define CShowWeapon C_ShowWeapon
+#endif
+class CShowWeapon : public CAutoGameSystemPerFrame
+{
+public:
+	bool Init()
+	{
+		ClearShowWeapon();
+		return true;
+	}
+	void FrameUpdatePreEntityThink()
+	{
+		if (m_pWeapon&&m_flTime<gpGlobals->curtime)
+		{
+			ShowWeapon();
+		}
+	}
+	void Update(float frametime)
+	{
+		FrameUpdatePreEntityThink(); // This adds compatibility to this gamesystem on the client
+	}
+	void SetShowWeapon(CBaseCombatWeapon *pWeapon, int iActivity, float delta)
+	{
+		m_pWeapon = pWeapon;
+		m_iActivity = iActivity;
+		if (delta == 0)
+		{
+			ShowWeapon();
+		}
+		else
+		{
+			m_flTime = gpGlobals->curtime + delta;
+		}
+	}
+	void ClearShowWeapon()
+	{
+		m_pWeapon = NULL;
+	}
+private:
+	void ShowWeapon()
+	{
+		Assert(m_pWeapon);
+		if (m_pWeapon)
+		{
+			m_pWeapon->SetWeaponVisible(true);
+			if (m_pWeapon->GetOwner())
+			{
+				CBaseCombatWeapon *pLastWeapon = m_pWeapon->GetOwner()->GetActiveWeapon();
+				m_pWeapon->GetOwner()->m_hActiveWeapon = m_pWeapon;
+				CBasePlayer *pOwner = ToBasePlayer(m_pWeapon->GetOwner());
+				if (pOwner)
+				{
+					m_pWeapon->SetViewModel();
+					m_pWeapon->SendWeaponAnim(m_iActivity);
+
+					pOwner->SetNextAttack(gpGlobals->curtime + m_pWeapon->SequenceDuration());
+
+					if (pLastWeapon && pOwner->Weapon_ShouldSetLast(pLastWeapon, m_pWeapon))
+					{
+						pOwner->Weapon_SetLast(pLastWeapon->GetLastWeapon());
+					}
+
+					CBaseViewModel *pViewModel = pOwner->GetViewModel();
+					Assert(pViewModel);
+					if (pViewModel)
+						pViewModel->RemoveEffects(EF_NODRAW);
+					pOwner->ResetAutoaim();
+				}
+			}
+
+			// Can't shoot again until we've finished deploying
+			m_pWeapon->m_flNextSecondaryAttack = m_pWeapon->m_flNextPrimaryAttack = gpGlobals->curtime + m_pWeapon->SequenceDuration();
+		}
+
+		ClearShowWeapon();
+	}
+	CBaseCombatWeapon *m_pWeapon;
+	int m_iActivity;
+	float m_flTime;
+};
+static CShowWeapon g_ShowWeapon;
+
+//-----------------------------------------------------------------------------
 // Purpose: Get my data in the file weapon info array
 //-----------------------------------------------------------------------------
 const FileWeaponInfo_t &CBaseCombatWeapon::GetWpnData( void ) const
@@ -1392,6 +1478,40 @@ bool CBaseCombatWeapon::DefaultDeploy( char *szViewModel, char *szWeaponModel, i
 	if ( !HasAnyAmmo() && AllowsAutoSwitchFrom() )
 		return false;
 
+#ifdef VANCE
+	float flSequenceDuration = 0.0f;
+	CBasePlayer *pOwner = ToBasePlayer(GetOwner());
+	if (pOwner)
+	{
+		if (!GetOwner()->IsAlive())
+			return false;
+
+		pOwner->SetAnimationExtension(szAnimExt);
+
+		CBaseCombatWeapon *pActive = pOwner->GetActiveWeapon();
+		if (pActive && pActive->GetActivity() == ACT_VM_HOLSTER)
+		{
+			flSequenceDuration = pActive->SequenceDuration();
+		}
+
+		pOwner->SetNextAttack(gpGlobals->curtime + SequenceDuration());
+	}
+	g_ShowWeapon.SetShowWeapon(this, iActivity, flSequenceDuration);
+
+	// Can't shoot again until we've finished deploying
+	m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
+	m_flNextSecondaryAttack = gpGlobals->curtime + SequenceDuration();
+	m_flHudHintMinDisplayTime = 0;
+
+	m_bAltFireHudHintDisplayed = false;
+	m_bReloadHudHintDisplayed = false;
+	m_flHudHintPollTime = gpGlobals->curtime + 5.0f;
+
+#ifndef CLIENT_DLL
+	// Cancel any pending hide events
+	g_EventQueue.CancelEventOn(this, "HideWeapon");
+#endif
+#else
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
 	if ( pOwner )
 	{
@@ -1421,13 +1541,12 @@ bool CBaseCombatWeapon::DefaultDeploy( char *szViewModel, char *szWeaponModel, i
 	SetWeaponVisible( true );
 
 /*
-
 This code is disabled for now, because moving through the weapons in the carousel 
 selects and deploys each weapon as you pass it. (sjb)
-
 */
 
 	SetContextThink( NULL, 0, HIDEWEAPON_THINK_CONTEXT );
+#endif
 
 	return true;
 }
@@ -1646,12 +1765,47 @@ void CBaseCombatWeapon::ItemPreFrame( void )
 //====================================================================================
 // WEAPON BEHAVIOUR
 //====================================================================================
+/*
+void CBaseCombatWeapon::ProcessAnimationEvents(void)
+{
+	CBasePlayer *pOwner = ToBasePlayer(GetOwner());
+	if (!pOwner)
+		return;
+
+	if (!m_bWeaponIsLowered && (pOwner->m_nButtons & IN_SPEED))
+	{
+		m_bWeaponIsLowered = true;
+		SendWeaponAnim(ACT_VM_SPRINT);
+		m_flNextPrimaryAttack = gpGlobals->curtime + GetViewModelSequenceDuration();
+		m_flNextSecondaryAttack = m_flNextPrimaryAttack;
+	}
+	else if (m_bWeaponIsLowered && !(pOwner->m_nButtons & IN_SPEED))
+	{
+		m_bWeaponIsLowered = false;
+		SendWeaponAnim(ACT_VM_IDLE);
+		m_flNextPrimaryAttack = gpGlobals->curtime + GetViewModelSequenceDuration();
+		m_flNextSecondaryAttack = m_flNextPrimaryAttack;
+	}
+
+	if (m_bWeaponIsLowered)
+	{
+		if (gpGlobals->curtime > m_flNextPrimaryAttack)
+		{
+			SendWeaponAnim(ACT_VM_SPRINT);
+			m_flNextPrimaryAttack = gpGlobals->curtime + GetViewModelSequenceDuration();
+			m_flNextSecondaryAttack = m_flNextPrimaryAttack;
+		}
+	}
+}
+*/
+
 void CBaseCombatWeapon::ItemPostFrame( void )
 {
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
 	if (!pOwner)
 		return;
 
+	//ProcessAnimationEvents();
 	UpdateAutoFire();
 
 	//Track the duration of the fire

@@ -9,6 +9,13 @@
 
 #include "hl2_player_shared.h"
 
+#ifdef VANCE
+#ifndef CLIENT_DLL
+#include "in_buttons.h"
+#include "hl2_player.h"
+#endif
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -37,6 +44,7 @@ BEGIN_DATADESC( CBaseHLCombatWeapon )
 	DEFINE_FIELD( m_bLowered,			FIELD_BOOLEAN ),
 	DEFINE_FIELD( m_flRaiseTime,		FIELD_TIME ),
 	DEFINE_FIELD( m_flHolsterTime,		FIELD_TIME ),
+	DEFINE_FIELD( m_flNextFidgetTime,	FIELD_TIME ),
 	DEFINE_FIELD( m_iPrimaryAttacks,	FIELD_INTEGER ),
 	DEFINE_FIELD( m_iSecondaryAttacks,	FIELD_INTEGER ),
 
@@ -81,6 +89,24 @@ bool CBaseHLCombatWeapon::CanLower()
 		return false;
 	return true;
 }
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+#ifdef VANCE
+bool CBaseHLCombatWeapon::CanSprint()
+{
+	if (SelectWeightedSequence(ACT_VM_SPRINT) == ACTIVITY_NOT_AVAILABLE)
+		return false;
+	return true;
+}
+
+bool CBaseHLCombatWeapon::CanWalkBob()
+{
+	if (SelectWeightedSequence(ACT_VM_WALK) == ACTIVITY_NOT_AVAILABLE)
+		return false;
+	return true;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: Drops the weapon into a lowered pose
@@ -175,8 +201,31 @@ bool CBaseHLCombatWeapon::WeaponShouldBeLowered( void )
 	
 #if !defined( CLIENT_DLL )
 
+#ifdef VANCE
+	CHL2_Player *player = dynamic_cast<CHL2_Player*>(GetOwner());
+	if (player)
+	{
+		if (!(player->GetFlags() & FL_ONGROUND) && player->GetWaterLevel() < 3)
+			return true;
+	}
+#endif
+
 	if ( GlobalEntity_GetState( "friendly_encounter" ) == GLOBAL_ON )
 		return true;
+
+#ifdef VANCE
+	//Trace forward and see if he hit a wall.
+	trace_t tr;
+	Vector forward;
+	player->EyeVectors(&forward);
+	UTIL_TraceLine(player->EyePosition(),
+		player->EyePosition() + forward * 36,
+		MASK_SOLID, this, COLLISION_GROUP_WEAPON, &tr);
+
+	//If we hit something.
+	if (tr.fraction != 1.0)
+		return true;
+#endif
 
 #endif
 
@@ -188,16 +237,52 @@ bool CBaseHLCombatWeapon::WeaponShouldBeLowered( void )
 //-----------------------------------------------------------------------------
 void CBaseHLCombatWeapon::WeaponIdle( void )
 {
+#ifdef VANCE
+#ifndef CLIENT_DLL
+	CHL2_Player *player = dynamic_cast<CHL2_Player*>(GetOwner());
+#else
+	C_BasePlayer *player = dynamic_cast<C_BasePlayer*>(GetOwner());
+#endif
+
+	if (!player)
+		return;
+
+	float speed = player->GetLocalVelocity().Length2D();
+
+	if (CanSprint() &&
+#ifndef CLIENT_DLL
+	(player->m_nButtons & IN_FORWARD) && (player->m_nButtons & IN_SPEED) &&
+#endif
+		speed >= 300 && !(player->GetWaterLevel() == 3) && (player->GetFlags() & FL_ONGROUND))
+	{
+		if (GetActivity() != ACT_VM_SPRINT && (GetActivity() == ACT_VM_IDLE || GetActivity() == ACT_VM_WALK || GetActivity() == ACT_VM_IDLE_LOWERED) || GetActivity() == ACT_VM_IDLE_TO_LOWERED || GetActivity() == ACT_VM_LOWERED_TO_IDLE)
+		{
+			SendWeaponAnim(ACT_VM_SPRINT);
+		}
+		else if (HasWeaponIdleTimeElapsed())
+		{
+			SendWeaponAnim(ACT_VM_SPRINT);
+		}
+	}
+
 	//See if we should idle high or low
-	if ( WeaponShouldBeLowered() )
+	else if (WeaponShouldBeLowered())
+	{
+#if !defined( CLIENT_DLL )
+		player->Weapon_Lower();
+#endif
+#else
+	//See if we should idle high or low
+	if (WeaponShouldBeLowered())
 	{
 #if !defined( CLIENT_DLL )
 		CHL2_Player *pPlayer = dynamic_cast<CHL2_Player*>(GetOwner());
 
-		if( pPlayer )
+		if (pPlayer)
 		{
 			pPlayer->Weapon_Lower();
 		}
+#endif
 #endif
 
 		// Move to lowered position if we're not there yet
@@ -212,6 +297,15 @@ void CBaseHLCombatWeapon::WeaponIdle( void )
 			SendWeaponAnim( ACT_VM_IDLE_LOWERED );
 		}
 	}
+#ifdef VANCE
+	else if (CanWalkBob() && speed >= 100 && !(player->GetWaterLevel() == 3) && (player->GetFlags() & FL_ONGROUND))
+	{
+		if (GetActivity() != ACT_VM_WALK && (GetActivity() == ACT_VM_IDLE || GetActivity() == ACT_VM_SPRINT))
+			SendWeaponAnim(ACT_VM_WALK);
+		else if (HasWeaponIdleTimeElapsed())
+			SendWeaponAnim(ACT_VM_WALK);
+	}
+#endif
 	else
 	{
 		// See if we need to raise immediately
@@ -219,9 +313,30 @@ void CBaseHLCombatWeapon::WeaponIdle( void )
 		{
 			SendWeaponAnim( ACT_VM_IDLE );
 		}
-		else if ( HasWeaponIdleTimeElapsed() ) 
+
+#ifdef VANCE
+		else if (speed <= 300 && GetActivity() == ACT_VM_SPRINT)
 		{
-			SendWeaponAnim( ACT_VM_IDLE );
+			SendWeaponAnim(ACT_VM_IDLE);
+		}
+		else if (speed <= 100 && GetActivity() == ACT_VM_WALK)
+		{
+			SendWeaponAnim(ACT_VM_IDLE);
+		}
+#endif
+
+		else if (HasWeaponIdleTimeElapsed())
+		{
+			if (gpGlobals->curtime >= m_flNextFidgetTime)
+			{
+				//DevMsg("ACT_VM_FIDGET time!\n");
+				SendWeaponAnim(ACT_VM_FIDGET);
+				m_flNextFidgetTime = gpGlobals->curtime + 9.0f;
+			}
+			else
+			{
+				SendWeaponAnim(ACT_VM_IDLE);
+			}
 		}
 	}
 }
@@ -385,7 +500,6 @@ float CBaseHLCombatWeapon::CalcViewmodelBob( void )
 void CBaseHLCombatWeapon::AddViewmodelBob( CBaseViewModel *viewmodel, Vector &origin, QAngle &angles )
 {
 }
-
 
 //-----------------------------------------------------------------------------
 Vector CBaseHLCombatWeapon::GetBulletSpread( WeaponProficiency_t proficiency )

@@ -464,6 +464,10 @@ protected:
 private:
 	Hull_t		m_eHull;
 
+#ifdef VANCE
+	friend class CShowWeapon; // This allows CShowWeapon to access whatever it needs to update for the character
+#endif
+
 	void				UpdateGlowEffect( void );
 	void				DestroyGlowEffect( void );
 

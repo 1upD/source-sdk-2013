@@ -1,8 +1,7 @@
 "GameInfo"
 {
-	game 		"My First Episodic Mod"
-	title 		"HALF-LIFE'"
-	title2		""
+	game 		"VANCE"
+	title 		"VANCE"
 	supportsvr	1
 
 	type		singleplayer_only

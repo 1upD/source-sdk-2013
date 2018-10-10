@@ -250,6 +250,7 @@ typedef enum
 	ACT_VM_IDLE_TO_LOWERED,
 	ACT_VM_IDLE_LOWERED,
 	ACT_VM_LOWERED_TO_IDLE,
+
 	ACT_VM_RECOIL1,
 	ACT_VM_RECOIL2,
 	ACT_VM_RECOIL3,
@@ -2106,6 +2107,11 @@ typedef enum
 	ACT_SPELL_VM_IDLE, 
 	ACT_SPELL_VM_ARM, 
 	ACT_SPELL_VM_FIRE,
+
+#ifdef VANCE
+	ACT_VM_WALK,
+	ACT_VM_SPRINT,
+#endif
 
 	// this is the end of the global activities, private per-monster activities start here.
 	LAST_SHARED_ACTIVITY,

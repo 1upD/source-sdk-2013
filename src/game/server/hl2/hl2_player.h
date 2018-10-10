@@ -360,6 +360,8 @@ private:
 	EHANDLE				m_hLocatorTargetEntity; // The entity that's being tracked by the suit locator.
 
 	float				m_flTimeNextLadderHint;	// Next time we're eligible to display a HUD hint about a ladder.
+
+	float				m_flNextSprint;			// Next time we're allowed to sprint.
 	
 	friend class CHL2GameMovement;
 };

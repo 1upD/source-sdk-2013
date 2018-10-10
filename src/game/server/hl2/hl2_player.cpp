@@ -81,7 +81,7 @@ ConVar sv_autojump( "sv_autojump", "0" );
 
 ConVar hl2_walkspeed( "hl2_walkspeed", "150" );
 ConVar hl2_normspeed( "hl2_normspeed", "190" );
-ConVar hl2_sprintspeed( "hl2_sprintspeed", "320" );
+ConVar hl2_sprintspeed( "hl2_sprintspeed", "330" );
 
 ConVar hl2_darkness_flashlight_factor ( "hl2_darkness_flashlight_factor", "1" );
 
@@ -395,6 +395,8 @@ CHL2_Player::CHL2_Player()
 
 	m_flArmorReductionTime = 0.0f;
 	m_iArmorReductionFrom = 0;
+
+	m_flNextSprint = 0.0f;
 }
 
 //
@@ -640,6 +642,16 @@ void CHL2_Player::PreThink(void)
 					SetAbsVelocity( vecNewVelocity );
 				}
 			}
+		}
+	}
+
+	// Manually force us to sprint again if sprint is interupted
+	if (m_flNextSprint != 0.0f && m_flNextSprint < gpGlobals->curtime)
+	{
+		m_flNextSprint = 0.0f;
+		if (m_nButtons & IN_SPEED)
+		{
+			m_afButtonPressed |= IN_SPEED;
 		}
 	}
 
@@ -901,6 +913,22 @@ void CHL2_Player::PostThink( void )
 	if ( !g_fGameOver && !IsPlayerLockedInPlace() && IsAlive() )
 	{
 		 HandleAdmireGlovesAnimation();
+	}
+
+	// Assign our speed to this variable
+	float playerSpeed = GetLocalVelocity().Length2D();
+
+	// Print our player speed:
+	//DevMsg("Player Speed: %.6f\n", playerSpeed);
+
+	// If sprinting and shot(s) fired, slow us down as a penalty.
+	if (playerSpeed >= 300 /*&& GetActiveWeapon() != NULL*/)
+	{
+		if (m_nButtons & (IN_ATTACK | IN_ATTACK2))
+		{
+			StopSprinting();
+			m_flNextSprint = gpGlobals->curtime + 1.0f;
+		}
 	}
 }
 
@@ -1166,6 +1194,9 @@ void CHL2_Player::InitSprinting( void )
 //-----------------------------------------------------------------------------
 bool CHL2_Player::CanSprint()
 {
+	if (m_flNextSprint >= gpGlobals->curtime)
+		return false;
+
 	return ( m_bSprintEnabled &&										// Only if sprint is enabled 
 			!IsWalking() &&												// Not if we're walking
 			!( m_Local.m_bDucked && !m_Local.m_bDucking ) &&			// Nor if we're ducking
