@@ -1975,7 +1975,7 @@ int CNPC_Combine::SelectScheduleObject()
 
 	CScheduleObject ThrowGrenade;
 	ThrowGrenade.m_iSchedType = SCHED_RANGE_ATTACK2;
-	ThrowGrenade.m_bCondition = (HasCondition(COND_SEE_ENEMY) ? (CanGrenadeEnemy(true) && flDist > 256) : CanGrenadeEnemy(false)) && IsClosest;
+	ThrowGrenade.m_bCondition = (HasCondition(COND_SEE_ENEMY) ? (CanGrenadeEnemy(true) && flDist > 256.0f) : CanGrenadeEnemy(false)) && IsClosest;
 	ThrowGrenade.m_bSquadslot = OccupyStrategySlot(SQUAD_SLOT_GRENADE1);
 	ThrowGrenade.m_fSchedPriority = 12.0f;
 
@@ -1999,12 +1999,13 @@ int CNPC_Combine::SelectScheduleObject()
 
 	CScheduleObject TakeCover;
 	TakeCover.m_iSchedType = SCHED_TAKE_COVER_FROM_ENEMY;
-	TakeCover.m_bCondition = !HasMemory(bits_MEMORY_INCOVER);
+	TakeCover.m_bCondition = !HasMemory(bits_MEMORY_INCOVER) || HasCondition(COND_SEE_ENEMY) && !OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
 	TakeCover.m_fSchedPriority = 10.0f;
 
 	CScheduleObject Reposition;
 	Reposition.m_iSchedType = SCHED_TAKE_COVER_FROM_ENEMY;
-	Reposition.m_bCondition = !HasMemory(bits_MEMORY_INCOVER) && (HasCondition(COND_LIGHT_DAMAGE) || HasCondition(COND_HEAVY_DAMAGE) && !HasShotgun());
+	Reposition.m_bCondition = (!HasMemory(bits_MEMORY_INCOVER) || HasCondition(COND_SEE_ENEMY)) && (HasCondition(COND_LIGHT_DAMAGE) || HasCondition(COND_HEAVY_DAMAGE) && !HasShotgun());
+	Reposition.m_bSquadslot = OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
 	Reposition.m_fSchedPriority = GetLastAttackTime() + 1 > gpGlobals->curtime ? 15.0f : 9.0f;
 
 	CScheduleObject Flank;
@@ -2024,9 +2025,9 @@ int CNPC_Combine::SelectScheduleObject()
 		int ArraySize;
 	};
 
-	CScheduleObject GoalEngageEnemy[] = { ShootGun, Melee, ThrowGrenade, Reload, Reposition, Flank, SpecialAttack };
+	CScheduleObject GoalEngageEnemy[] = { ShootGun, Melee, ThrowGrenade, Reload, Reposition, SpecialAttack };
 	CScheduleObject GoalSeekEnemy[] = { EstablishLOS, };
-	CScheduleObject GoalEvadeEnemy[] = { TakeCover, };
+	CScheduleObject GoalEvadeEnemy[] = { TakeCover, Overwatch };
 
 
 	GoalTable AvailableGoals[] =
@@ -2070,7 +2071,9 @@ int CNPC_Combine::SelectScheduleObject()
 //-----------------------------------------------------------------------------
 int CNPC_Combine::SelectFailSchedule(int failedSchedule, int failedTask, AI_TaskFailureCode_t taskFailCode)
 {
-	if (failedSchedule == SCHED_COMBINE_TAKE_COVER1)
+
+	/*
+		if (failedSchedule == SCHED_COMBINE_TAKE_COVER1)
 	{
 		if (IsInSquad() && IsStrategySlotRangeOccupied(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2) && HasCondition(COND_SEE_ENEMY))
 		{
@@ -2082,6 +2085,7 @@ int CNPC_Combine::SelectFailSchedule(int failedSchedule, int failedTask, AI_Task
 			return SCHED_COMBINE_MOVE_TO_MELEE;
 		}
 	}
+	*/
 
 	return BaseClass::SelectFailSchedule(failedSchedule, failedTask, taskFailCode);
 }
@@ -3812,6 +3816,7 @@ SCHED_COMBINE_OVERWATCH,
 ""
 "	Interrupts"
 "		COND_CAN_RANGE_ATTACK1"
+"		COND_SEE_ENEMY"	
 "		COND_ENEMY_DEAD"
 "		COND_LIGHT_DAMAGE"
 "		COND_HEAVY_DAMAGE"
