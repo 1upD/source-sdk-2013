@@ -19,6 +19,7 @@
 #include "iservervehicle.h"
 #include "items.h"
 #include "hl2_gamerules.h"
+#include "scheduleobject.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -648,10 +649,12 @@ void CNPC_MetroPolice::Spawn( void )
 
 	m_flFieldOfView		= -0.2;// indicates the width of this NPC's forward view cone ( as a dotproduct result )
 	m_NPCState			= NPC_STATE_NONE;
+
+	// | bits_CAP_MOVE_SHOOT
 	if ( !HasSpawnFlags( SF_NPC_START_EFFICIENT ) )
 	{
 		CapabilitiesAdd( bits_CAP_TURN_HEAD | bits_CAP_ANIMATEDFACE );
-		CapabilitiesAdd( bits_CAP_AIM_GUN | bits_CAP_MOVE_SHOOT );
+		CapabilitiesAdd( bits_CAP_AIM_GUN );
 	}
 	CapabilitiesAdd( bits_CAP_MOVE_GROUND );
 	CapabilitiesAdd( bits_CAP_USE_WEAPONS | bits_CAP_NO_HIT_SQUADMATES );
@@ -4167,11 +4170,12 @@ int CNPC_MetroPolice::SelectSchedule( void )
 			}
 			break;
 
+			//!IsEnemyInAnAirboat() || !Weapon_OwnsThisType( "weapon_smg1" )
+
 		case NPC_STATE_COMBAT:
-			if (!IsEnemyInAnAirboat() || !Weapon_OwnsThisType( "weapon_smg1" ) )
+			if (!IsEnemyInAnAirboat() )
 			{
-				int nResult = SelectCombatSchedule();
-				if ( nResult != SCHED_NONE )
+				int nResult = SelectScheduleObject();
 					return nResult;
 			}
 			else
@@ -4193,6 +4197,146 @@ int CNPC_MetroPolice::SelectSchedule( void )
 	}
 
 	return BaseClass::SelectSchedule();
+}
+
+int CNPC_MetroPolice::SelectScheduleObject()
+{
+	//std::vector<CScheduleObject> Schedules;
+
+	//Check health and ammo
+	float ammoperc = (float)GetActiveWeapon()->m_iClip1 / GetActiveWeapon()->GetMaxClip1();
+	ammoperc = clamp(ammoperc, 0.0f, 1.0f);
+
+	float healthperc = (float)GetHealth() / GetMaxHealth();
+	healthperc = clamp(healthperc, 0.0f, 1.0f);
+
+	//CBaseCombatCharacter* pBCC = GetEnemyCombatCharacterPointer();
+
+	float flDist = (GetEnemy()->GetAbsOrigin() - GetAbsOrigin()).Length();
+	//	float flDistLastSeen = (GetEnemyLastSeenPosBySquad(GetEnemy()) - GetAbsOrigin()).Length();
+	Vector vecEnemy = GetEnemy()->GetAbsOrigin();
+
+	bool IsClosest = true;
+	if (m_pSquad)
+	{
+		if (m_pSquad->GetSquadMemberNearestTo(GetEnemy()->GetAbsOrigin()) != this)
+			IsClosest = false;
+	}
+
+
+	CScheduleObject ShootGun;
+	ShootGun.m_iSchedType = SCHED_RANGE_ATTACK1;
+	ShootGun.m_bCondition = HasCondition(COND_CAN_RANGE_ATTACK1);
+	ShootGun.m_bSquadslot = OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
+	ShootGun.m_fSchedPriority = 10.0f;
+
+	CScheduleObject DrawPistol;
+	DrawPistol.m_iSchedType = SCHED_METROPOLICE_DRAW_PISTOL;
+	DrawPistol.m_bCondition = !m_fWeaponDrawn;
+	DrawPistol.m_fSchedPriority = 12.0f;
+
+	CScheduleObject Melee;
+	Melee.m_iSchedType = SCHED_MELEE_ATTACK1;
+	Melee.m_bCondition = HasCondition(COND_CAN_MELEE_ATTACK1);
+	Melee.m_fSchedPriority = 20.0f;
+
+	CScheduleObject BackAway;
+	BackAway.m_iSchedType = SCHED_BACK_AWAY_FROM_ENEMY;
+	BackAway.m_bCondition = HasCondition(COND_TOO_CLOSE_TO_ATTACK);
+	BackAway.m_fSchedPriority = 20.0f;
+
+	CScheduleObject Reload;
+	Reload.m_iSchedType = SCHED_RELOAD;
+	Reload.m_bCondition = ammoperc < 1.0f && GetEnemyLastTimeSeen() + 5.5 <= gpGlobals->curtime || ammoperc < 0.25f;
+	Reload.m_fSchedPriority = 5.0f;
+
+	CScheduleObject DeployManhack;
+	DeployManhack.m_iSchedType = SCHED_RANGE_ATTACK2;
+	DeployManhack.m_bCondition = (CanDeployManhack() && (!HasCondition(COND_SEE_ENEMY) || flDist > 256.0f));
+	DeployManhack.m_bSquadslot = OccupyStrategySlot(SQUAD_SLOT_POLICE_DEPLOY_MANHACK);
+	DeployManhack.m_fSchedPriority = 12.0f;
+
+
+	CScheduleObject Overwatch;
+	Overwatch.m_iSchedType = SCHED_COMBAT_FACE;
+	Overwatch.m_bCondition = !HasCondition(COND_SEE_ENEMY);
+	Overwatch.m_fSchedPriority = 1.0f;
+
+
+	CScheduleObject EstablishLOS;
+	EstablishLOS.m_iSchedType = SCHED_ESTABLISH_LINE_OF_FIRE;
+	EstablishLOS.m_bCondition = !HasCondition(COND_SEE_ENEMY) || HasCondition(COND_SEE_ENEMY) && !HasCondition(COND_CAN_RANGE_ATTACK1);
+	EstablishLOS.m_bSquadslot = OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
+	EstablishLOS.m_fSchedPriority = 15.0f;
+
+	CScheduleObject TakeCover;
+	TakeCover.m_iSchedType = SCHED_TAKE_COVER_FROM_ENEMY;
+	TakeCover.m_bCondition = !HasMemory(bits_MEMORY_INCOVER) || HasCondition(COND_SEE_ENEMY) && !OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
+	TakeCover.m_fSchedPriority = 10.0f;
+
+	CScheduleObject Reposition;
+	Reposition.m_iSchedType = SCHED_TAKE_COVER_FROM_ENEMY;
+	Reposition.m_bCondition = (!HasMemory(bits_MEMORY_INCOVER) || HasCondition(COND_SEE_ENEMY)) && (HasCondition(COND_LIGHT_DAMAGE) || HasCondition(COND_HEAVY_DAMAGE));
+	Reposition.m_bSquadslot = OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
+	Reposition.m_fSchedPriority = GetLastAttackTime() + 1 > gpGlobals->curtime ? 15.0f : 9.0f;
+
+	CScheduleObject Chase;
+	Chase.m_iSchedType = SCHED_METROPOLICE_CHASE_ENEMY;
+	Chase.m_bCondition = !HasCondition(COND_CAN_MELEE_ATTACK1);
+	Chase.m_bSquadslot = OccupyStrategySlotRange(SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2);
+	Chase.m_fSchedPriority = 12.0f;
+
+	int FinalSched = SCHED_NONE;
+	int SchedPriority = 0;
+
+
+	struct GoalTable
+	{
+		bool GoalSet;
+		CScheduleObject * GoalArray;
+		int ArraySize;
+	};
+
+	CScheduleObject GoalEngageEnemy[] = { DrawPistol, ShootGun, BackAway, DeployManhack, Reload, Reposition, };
+	CScheduleObject GoalBatonEnemy[] = {Melee, Chase};
+	CScheduleObject GoalSeekEnemy[] = { EstablishLOS, };
+	CScheduleObject GoalEvadeEnemy[] = { TakeCover, Overwatch };
+
+
+	GoalTable AvailableGoals[] =
+	{
+		HasBaton() == true, GoalBatonEnemy, ARRAYSIZE(GoalBatonEnemy),
+		!HasBaton(), GoalEngageEnemy, ARRAYSIZE(GoalEngageEnemy),
+		true, GoalSeekEnemy, ARRAYSIZE(GoalSeekEnemy),
+		true, GoalEvadeEnemy, ARRAYSIZE(GoalEvadeEnemy),
+	};
+
+
+	for (int i = 0; i < ARRAYSIZE(AvailableGoals); i++)
+	{
+
+		if (AvailableGoals[i].GoalSet == true)
+		{
+
+			for (int v = 0; v < AvailableGoals[i].ArraySize; v++)
+			{
+				CScheduleObject GoalSched = AvailableGoals[i].GoalArray[v];
+
+				if (GoalSched.m_bCondition && GoalSched.m_fSchedPriority > SchedPriority && GoalSched.m_bSquadslot)
+				{
+					SchedPriority = GoalSched.m_fSchedPriority;
+					FinalSched = GoalSched.m_iSchedType;
+				}
+			}
+		}
+
+		if (FinalSched > 0)
+		{
+			break;
+		}
+	}
+
+	return FinalSched;
 }
 
 
