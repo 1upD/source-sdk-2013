@@ -49,7 +49,10 @@ $Project "Server (VANCE)"
 		
 		$Folder	"VANCE DLL"
 		{
-			
+				$File	"episodic\grenade_hopwire.cpp"
+				$File	"episodic\grenade_hopwire.h"
+				$File	"episodic\weapon_hopwire.cpp"
+				$File	"mod\weapon_custom_flaregun.cpp"			
 		}
 
 		$Folder	"HL2 DLL"
