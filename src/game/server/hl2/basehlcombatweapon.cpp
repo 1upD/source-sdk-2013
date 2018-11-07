@@ -336,7 +336,11 @@ void CHLSelectFireMachineGun::PrimaryAttack( void )
 	case FIREMODE_FULLAUTO:
 		BaseClass::PrimaryAttack();
 		// Msg("%.3f\n", m_flNextPrimaryAttack.Get() );
+	#ifdef VANCE
+		//SetWeaponIdleTime( gpGlobals->curtime + 3.0f );
+	#else
 		SetWeaponIdleTime( gpGlobals->curtime + 3.0f );
+	#endif
 		break;
 
 	case FIREMODE_3RNDBURST:
