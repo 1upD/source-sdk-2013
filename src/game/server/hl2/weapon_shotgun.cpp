@@ -482,11 +482,19 @@ void CWeaponShotgun::PrimaryAttack( void )
 		pPlayer->SetSuitUpdate("!HEV_AMO0", FALSE, 0); 
 	}
 
-	if( m_iClip1 )
+#ifdef VANCE
+	//if( m_iClip1 )
+	//{
+	//	// pump so long as some rounds are left.
+	//	m_bNeedPump = true;
+	//}
+#else
+	if (m_iClip1)
 	{
 		// pump so long as some rounds are left.
 		m_bNeedPump = true;
 	}
+#endif
 
 	m_iPrimaryAttacks++;
 	gamestats->Event_WeaponFired( pPlayer, true, GetClassname() );
@@ -539,11 +547,19 @@ void CWeaponShotgun::SecondaryAttack( void )
 		pPlayer->SetSuitUpdate("!HEV_AMO0", FALSE, 0); 
 	}
 
-	if( m_iClip1 )
+#ifdef VANCE
+	//if( m_iClip1 )
+	//{
+	//	// pump so long as some rounds are left.
+	//	m_bNeedPump = true;
+	//}
+#else
+	if (m_iClip1)
 	{
 		// pump so long as some rounds are left.
 		m_bNeedPump = true;
 	}
+#endif
 
 	m_iSecondaryAttacks++;
 	gamestats->Event_WeaponFired( pPlayer, false, GetClassname() );
