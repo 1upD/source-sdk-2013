@@ -74,7 +74,7 @@ void CNPC_CombineS::Spawn(void)
 	}
 
 	CapabilitiesAdd(bits_CAP_ANIMATEDFACE);
-	//CapabilitiesAdd( bits_CAP_MOVE_SHOOT );
+	CapabilitiesAdd( bits_CAP_MOVE_SHOOT ); // Adding move shoot back in by request
 	CapabilitiesAdd(bits_CAP_DOORS_GROUP);
 
 	BaseClass::Spawn();
