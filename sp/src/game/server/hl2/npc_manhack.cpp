@@ -261,6 +261,14 @@ CNPC_Manhack::~CNPC_Manhack()
 //-----------------------------------------------------------------------------
 Class_T	CNPC_Manhack::Classify(void)
 {
+#ifdef EZ
+	// If we are being held or if we are deployed by an NPC, use that NPC's relationships
+	if (GetOwnerEntity())
+	{
+		return GetOwnerEntity()->Classify();
+	}
+#endif
+
 #ifdef EZ2
 	// This is a "nemesis" manhack
 	if (m_bNemesis)
@@ -3053,6 +3061,21 @@ bool CNPC_Manhack::HandleInteraction(int interactionType, void* data, CBaseComba
 	if ( interactionType == g_interactionZombinePullGrenade )
 	{
 		m_bNemesis = true;
+
+		int priority;
+		Disposition_t disposition;
+		CBaseEntity * pEnemy;
+
+		// If the zombine that dispatched us has an enemy, prioritize that enemy
+		if (sourceEnt && sourceEnt->GetEnemy())
+		{
+			pEnemy = sourceEnt->GetEnemy();
+			priority = IRelationPriority( pEnemy );
+			disposition = IRelationType( pEnemy );
+
+			AddEntityRelationship( pEnemy, disposition, priority + 1 );
+		}
+
 		return false;
 	}
 #endif

@@ -79,7 +79,6 @@ ConVar	sk_zombie_soldier_health( "sk_zombie_soldier_health","150"); // Breadman 
 float g_flZombineGrenadeTimes = 0;
 
 #ifdef EZ
-string_t gm_iszZombineGrenadeTypeDefault;
 string_t gm_iszZombineGrenadeTypeFrag;
 string_t gm_iszZombineGrenadeTypeXen;
 string_t gm_iszZombineGrenadeTypeBattery;
@@ -115,6 +114,10 @@ public:
 	virtual const char *GetHeadcrabClassname( void );
 	virtual const char *GetHeadcrabModel( void );
 
+#ifdef EZ
+	virtual CBaseEntity *ClawAttack( float flDist, int iDamage, QAngle &qaViewPunch, Vector &vecVelocityPunch, int BloodOrigin );
+#endif
+
 	virtual void PainSound( const CTakeDamageInfo &info );
 	virtual void DeathSound( const CTakeDamageInfo &info );
 	virtual void AlertSound( void );
@@ -128,6 +131,8 @@ public:
 #ifdef EZ
 	virtual void ChargeSound( void );
 	virtual void ReadyGrenadeSound( void );
+
+	virtual void ChooseDefaultGrenadeType();
 #endif
 
 	virtual void Event_Killed( const CTakeDamageInfo &info );
@@ -203,13 +208,12 @@ private:
 #endif
 	EHANDLE	m_hGrenade;
 
-#ifdef EZ
-	string_t	m_iszGrenadeType;
-#endif
-
 protected:
 	static const char *pMoanSounds[];
 
+#ifdef EZ
+	string_t	m_iszGrenadeType = NULL_STRING;
+#endif
 };
 
 LINK_ENTITY_TO_CLASS( npc_zombine, CNPC_Zombine );
@@ -234,6 +238,18 @@ BEGIN_DATADESC( CNPC_Zombine )
 	DEFINE_INPUTFUNC( FIELD_VOID,	"StartSprint", InputStartSprint ),
 	DEFINE_INPUTFUNC( FIELD_VOID,	"PullGrenade", InputPullGrenade ),
 END_DATADESC()
+
+#ifdef EZ
+class CNPC_MetroZombie : public CNPC_Zombine
+{
+	DECLARE_CLASS( CNPC_MetroZombie, CNPC_Zombine );
+
+	void Precache( void );
+	void ChooseDefaultGrenadeType();
+};
+
+LINK_ENTITY_TO_CLASS( npc_metrozombie, CNPC_MetroZombie );
+#endif
 
 //---------------------------------------------------------
 //---------------------------------------------------------
@@ -394,48 +410,17 @@ void CNPC_Zombine::Precache( void )
 
 	PrecacheModel( STRING( GetModelName() ) );
 
-	if ( m_iszGrenadeType == NULL_STRING )
-	{
-		m_iszGrenadeType = gm_iszZombineGrenadeTypeDefault;
-
-		
-	}
-
 	BaseClass::Precache();
 #endif
 }
 
 void CNPC_Zombine::AllocPooledStringsForGrenadeTypes()
 {
-	if (gm_iszZombineGrenadeTypeDefault == NULL_STRING)
-	{
-		gm_iszZombineGrenadeTypeDefault = AllocPooledString( "default" );
-	}
-
-	if (gm_iszZombineGrenadeTypeFrag == NULL_STRING)
-	{
-		gm_iszZombineGrenadeTypeFrag = AllocPooledString( "npc_grenade_frag" );
-	}
-
-	if (gm_iszZombineGrenadeTypeXen == NULL_STRING)
-	{
-		gm_iszZombineGrenadeTypeXen = AllocPooledString( "npc_grenade_hopwire" );
-	}
-
-	if (gm_iszZombineGrenadeTypeBattery == NULL_STRING)
-	{
-		gm_iszZombineGrenadeTypeBattery = AllocPooledString( "item_battery" );
-	}
-
-	if (gm_iszZombineGrenadeTypeStunstick == NULL_STRING)
-	{
-		gm_iszZombineGrenadeTypeStunstick = AllocPooledString( "weapon_stunstick" );
-	}
-
-	if (gm_iszZombineGrenadeTypeManhack == NULL_STRING)
-	{
-		gm_iszZombineGrenadeTypeManhack = AllocPooledString( "npc_manhack" );
-	}
+	gm_iszZombineGrenadeTypeFrag = AllocPooledString( "npc_grenade_frag" );
+	gm_iszZombineGrenadeTypeXen = AllocPooledString( "npc_grenade_hopwire" );
+	gm_iszZombineGrenadeTypeBattery = AllocPooledString( "item_battery" );
+	gm_iszZombineGrenadeTypeStunstick = AllocPooledString( "weapon_stunstick" );
+	gm_iszZombineGrenadeTypeManhack = AllocPooledString( "npc_manhack" );
 }
 
 void CNPC_Zombine::SetZombieModel( void )
@@ -757,16 +742,9 @@ void CNPC_Zombine::HandleAnimEvent( animevent_t *pEvent )
 #ifdef EZ
 		CBaseEntity *pGrenade = NULL;
 
-		if (m_iszGrenadeType == gm_iszZombineGrenadeTypeDefault)
+		if (m_iszGrenadeType == NULL_STRING)
 		{
-			if (m_tEzVariant == EZ_VARIANT_RAD)
-			{
-				m_iszGrenadeType = gm_iszZombineGrenadeTypeXen;
-			}
-			else
-			{
-				m_iszGrenadeType = gm_iszZombineGrenadeTypeFrag;
-			}
+			ChooseDefaultGrenadeType();
 		}
 
 		if (m_iszGrenadeType == gm_iszZombineGrenadeTypeXen)
@@ -778,14 +756,22 @@ void CNPC_Zombine::HandleAnimEvent( animevent_t *pEvent )
 		{
 			pGrenade = Fraggrenade_Create( vecStart, vec3_angle, vec3_origin, AngularImpulse( 0, 0, 0 ), this, 3.5f, true );
 		}
+		else if (m_iszGrenadeType == gm_iszZombineGrenadeTypeStunstick)
+		{
+			CapabilitiesAdd( bits_CAP_WEAPON_MELEE_ATTACK1 );
+			GiveWeapon( m_iszGrenadeType );
+			m_iGrenadeCount = 0;
+			return;
+		}
 		else
 		{
 			const char * pGrenadeClass = STRING( m_iszGrenadeType );
 
-			DevMsg( "Warning: npc_zombine is using generic handling for grenade type: %s", m_iszGrenadeType );
+			DevMsg( "npc_zombine is using generic handling for grenade type: %s\n", pGrenadeClass );
 
 			pGrenade = CBaseEntity::Create( pGrenadeClass, vecStart, vec3_angle, this );
 
+			if(pGrenade)
 			pGrenade->SetOwnerEntity( this );
 		}
 
@@ -854,6 +840,10 @@ void CNPC_Zombine::HandleAnimEvent( animevent_t *pEvent )
 
 			m_iGrenadeCount--;
 		}
+		else
+		{
+			DevMsg( "Warning: Zombine tried to pull grenade but grenade is null!\n" );
+		}
 
 		return;
 	}
@@ -866,6 +856,20 @@ void CNPC_Zombine::HandleAnimEvent( animevent_t *pEvent )
 
 	BaseClass::HandleAnimEvent( pEvent );
 }
+
+#ifdef EZ
+void CNPC_Zombine::ChooseDefaultGrenadeType()
+{
+	if (m_tEzVariant == EZ_VARIANT_RAD)
+	{
+		m_iszGrenadeType = gm_iszZombineGrenadeTypeXen;
+	}
+	else
+	{
+		m_iszGrenadeType = gm_iszZombineGrenadeTypeFrag;
+	}
+}
+#endif
 
 bool CNPC_Zombine::AllowedToSprint( void )
 {
@@ -1342,6 +1346,31 @@ const char *CNPC_Zombine::GetHeadcrabModel( void )
 			return "models/headcrabclassic.mdl";
 	}
 }
+
+#ifdef EZ
+CBaseEntity * CNPC_Zombine::ClawAttack( float flDist, int iDamage, QAngle & qaViewPunch, Vector & vecVelocityPunch, int BloodOrigin )
+{
+	if (GetActiveWeapon())
+	{
+		animevent_t * pEvent = new animevent_t();
+		pEvent->event = EVENT_WEAPON_MELEE_HIT;
+
+		// If this is a right hand claw attack or both, check weapons
+		switch (BloodOrigin)
+		{
+		case ZOMBIE_BLOOD_RIGHT_HAND:
+		case ZOMBIE_BLOOD_BOTH_HANDS:
+			GetActiveWeapon()->Operator_HandleAnimEvent( pEvent, this );
+
+			if (BloodOrigin == ZOMBIE_BLOOD_RIGHT_HAND)
+				return NULL;
+		}
+	}
+
+	return BaseClass::ClawAttack(flDist, iDamage, qaViewPunch, vecVelocityPunch, BloodOrigin);
+}
+#endif
+
 #ifndef EZ
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -1443,6 +1472,51 @@ CBaseEntity *CNPC_Zombine::OnFailedPhysGunPickup( Vector vPhysgunPos )
 	ReleaseGrenade( vPhysgunPos );
 	return pGrenade;
 }
+
+#ifdef EZ
+void CNPC_MetroZombie::Precache( void )
+{
+	char * modelVariant;
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		modelVariant = "glowbie";
+		break;
+	case EZ_VARIANT_XEN:
+		modelVariant = "xenbie";
+		break;
+	default:
+		modelVariant = "zombie";
+		break;
+	}
+
+	if (GetModelName() == NULL_STRING)
+	{
+		SetModelName( AllocPooledString( UTIL_VarArgs( "models/zombie/%scop.mdl", modelVariant ) ) );
+	}
+
+	BaseClass::Precache();
+}
+
+void CNPC_MetroZombie::ChooseDefaultGrenadeType()
+{
+	int chance = random->RandomInt( 0, 2 );
+
+	switch (chance)
+	{
+	case 0:
+		m_iszGrenadeType = gm_iszZombineGrenadeTypeFrag;
+		break;
+	case 1:
+		m_iszGrenadeType = gm_iszZombineGrenadeTypeStunstick;
+		break;
+	default:
+		m_iszGrenadeType = gm_iszZombineGrenadeTypeManhack;
+		break;
+	}
+	return;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 //
