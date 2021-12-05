@@ -246,6 +246,14 @@ class CNPC_MetroZombie : public CNPC_Zombine
 
 	void Precache( void );
 	void ChooseDefaultGrenadeType();
+
+	virtual void PainSound( const CTakeDamageInfo &info );
+	virtual void DeathSound( const CTakeDamageInfo &info );
+	virtual void AlertSound( void );
+	virtual void IdleSound( void );
+	virtual void FootscuffSound( bool fRightFoot );
+	virtual void ChargeSound( void );
+	virtual void ReadyGrenadeSound( void );
 };
 
 LINK_ENTITY_TO_CLASS( npc_metrozombie, CNPC_MetroZombie );
@@ -1476,24 +1484,80 @@ CBaseEntity *CNPC_Zombine::OnFailedPhysGunPickup( Vector vPhysgunPos )
 #ifdef EZ
 void CNPC_MetroZombie::Precache( void )
 {
+	AllocPooledStringsForGrenadeTypes();
+
 	char * modelVariant;
 	switch (m_tEzVariant)
 	{
 	case EZ_VARIANT_RAD:
 		modelVariant = "glowbie";
+		PrecacheScriptSound( "Glowbie.FootstepRight" );
+		PrecacheScriptSound( "Glowbie.FootstepLeft" );
+		PrecacheScriptSound( "Glowbiecop.ScuffRight" );
+		PrecacheScriptSound( "Glowbiecop.ScuffLeft" );
+		PrecacheScriptSound( "Glowbie.AttackHit" );
+		PrecacheScriptSound( "Glowbie.AttackMiss" );
+		PrecacheScriptSound( "Glowbiecop.Pain" );
+		PrecacheScriptSound( "Glowbiecop.Die" );
+		PrecacheScriptSound( "Glowbiecop.Alert" );
+		PrecacheScriptSound( "Glowbiecop.Idle" );
+		PrecacheScriptSound( "Glowbiecop.ReadyGrenade" );
+
+		PrecacheScriptSound( "ATV_engine_null" );
+		PrecacheScriptSound( "Glowbiecop.Charge" );
+		PrecacheScriptSound( "Glowbie.Attack" );
 		break;
 	case EZ_VARIANT_XEN:
 		modelVariant = "xenbie";
+		PrecacheScriptSound( "Xenbie.FootstepRight" );
+		PrecacheScriptSound( "Xenbie.FootstepLeft" );
+		PrecacheScriptSound( "Xenbiecop.ScuffRight" );
+		PrecacheScriptSound( "Xenbiecop.ScuffLeft" );
+		PrecacheScriptSound( "Xenbie.AttackHit" );
+		PrecacheScriptSound( "Xenbie.AttackMiss" );
+		PrecacheScriptSound( "Xenbiecop.Pain" );
+		PrecacheScriptSound( "Xenbiecop.Die" );
+		PrecacheScriptSound( "Xenbiecop.Alert" );
+		PrecacheScriptSound( "Xenbiecop.Idle" );
+		PrecacheScriptSound( "Xenbiecop.ReadyGrenade" );
+
+		PrecacheScriptSound( "ATV_engine_null" );
+		PrecacheScriptSound( "Xenbiecop.Charge" );
+		PrecacheScriptSound( "Xenbie.Attack" );
 		break;
 	default:
 		modelVariant = "zombie";
+		PrecacheScriptSound( "Zombie.FootstepRight" );
+		PrecacheScriptSound( "Zombie.FootstepLeft" );
+		PrecacheScriptSound( "Zombiecop.ScuffRight" );
+		PrecacheScriptSound( "Zombiecop.ScuffLeft" );
+		PrecacheScriptSound( "Zombie.AttackHit" );
+		PrecacheScriptSound( "Zombie.AttackMiss" );
+		PrecacheScriptSound( "Zombiecop.Pain" );
+		PrecacheScriptSound( "Zombiecop.Die" );
+		PrecacheScriptSound( "Zombiecop.Alert" );
+		PrecacheScriptSound( "Zombiecop.Idle" );
+		PrecacheScriptSound( "Zombiecop.ReadyGrenade" );
+
+		PrecacheScriptSound( "ATV_engine_null" );
+		PrecacheScriptSound( "Zombiecop.Charge" );
+		PrecacheScriptSound( "Zombie.Attack" );
 		break;
 	}
-
 	if (GetModelName() == NULL_STRING)
 	{
 		SetModelName( AllocPooledString( UTIL_VarArgs( "models/zombie/%scop.mdl", modelVariant ) ) );
 	}
+	if (GetTorsoModelName() == NULL_STRING && m_tEzVariant != EZ_VARIANT_XEN)
+	{
+		SetTorsoModelName( AllocPooledString( UTIL_VarArgs( "models/zombie/%scop_torso.mdl", modelVariant ) ) );
+	}
+	if (GetLegsModelName() == NULL_STRING && m_tEzVariant != EZ_VARIANT_XEN)
+	{
+		SetLegsModelName( AllocPooledString( UTIL_VarArgs( "models/zombie/%scop_legs.mdl", modelVariant ) ) );
+	}
+
+	PrecacheModel( STRING( GetModelName() ) );
 
 	BaseClass::Precache();
 }
@@ -1515,6 +1579,175 @@ void CNPC_MetroZombie::ChooseDefaultGrenadeType()
 		break;
 	}
 	return;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Sound of a foot sliding/scraping
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::FootscuffSound( bool fRightFoot )
+{
+	if (m_tEzVariant == EZ_VARIANT_RAD && fRightFoot)
+	{
+		EmitSound( "Glowbiecop.ScuffRight" );
+	}
+	else if (m_tEzVariant == EZ_VARIANT_RAD)
+	{
+		EmitSound( "Glowbiecop.ScuffLeft" );
+	}
+	if (m_tEzVariant == EZ_VARIANT_XEN && fRightFoot)
+	{
+		EmitSound( "Xenbiecop.ScuffRight" );
+	}
+	else if (m_tEzVariant == EZ_VARIANT_XEN)
+	{
+		EmitSound( "Xenbiecop.ScuffLeft" );
+	}
+	else if (fRightFoot)
+	{
+		EmitSound( "Zombiecop.ScuffRight" );
+	}
+	else
+	{
+		EmitSound( "Zombiecop.ScuffLeft" );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::PainSound( const CTakeDamageInfo &info )
+{
+	// We're constantly taking damage when we are on fire. Don't make all those noises!
+	if (IsOnFire())
+	{
+		return;
+	}
+
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		EmitSound( "Glowbiecop.Pain" );
+		break;
+	case EZ_VARIANT_XEN:
+		EmitSound( "Xenbiecop.Pain" );
+		break;
+	default:
+		EmitSound( "Zombiecop.Pain" );
+		break;
+	}
+}
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::DeathSound( const CTakeDamageInfo &info )
+{
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		EmitSound( "Glowbiecop.Die" );
+		break;
+	case EZ_VARIANT_XEN:
+		EmitSound( "Xenbiecop.Die" );
+		break;
+	default:
+		EmitSound( "Zombiecop.Die" );
+		break;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::AlertSound( void )
+{
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		EmitSound( "Glowbiecop.Alert" );
+		break;
+	case EZ_VARIANT_XEN:
+		EmitSound( "Xenbiecop.Alert" );
+		break;
+	default:
+		EmitSound( "Zombiecop.Alert" );
+		break;
+	}
+
+	// Don't let a moan sound cut off the alert sound.
+	m_flNextMoanSound += random->RandomFloat( 2.0, 4.0 );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Play a random idle sound.
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::IdleSound( void )
+{
+	if (GetState() == NPC_STATE_IDLE && random->RandomFloat( 0, 1 ) == 0)
+	{
+		// Moan infrequently in IDLE state.
+		return;
+	}
+
+	if (IsSlumped())
+	{
+		// Sleeping zombies are quiet.
+		return;
+	}
+
+
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		EmitSound( "Glowbiecop.Idle" );
+		break;
+	case EZ_VARIANT_XEN:
+		EmitSound( "Xenbiecop.Idle" );
+		break;
+	default:
+		EmitSound( "Zombiecop.Idle" );
+		break;
+	}
+
+	MakeAISpookySound( 360.0f );
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Play a sound while charging towards the enemy
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::ChargeSound( void )
+{
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		EmitSound( "Glowbiecop.Charge" );
+		break;
+	case EZ_VARIANT_XEN:
+		EmitSound( "Xenbiecop.Charge" );
+		break;
+	default:
+		EmitSound( "Zombiecop.Charge" );
+		break;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Play a sound while readying a grenade
+//-----------------------------------------------------------------------------
+void CNPC_MetroZombie::ReadyGrenadeSound( void )
+{
+	switch (m_tEzVariant)
+	{
+	case EZ_VARIANT_RAD:
+		EmitSound( "Glowbiecop.ReadyGrenade" );
+		break;
+	case EZ_VARIANT_XEN:
+		EmitSound( "Xenbiecop.ReadyGrenade" );
+		break;
+	default:
+		EmitSound( "Zombiecop.ReadyGrenade" );
+		break;
+	}
 }
 #endif
 
