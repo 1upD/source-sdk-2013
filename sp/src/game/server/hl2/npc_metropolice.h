@@ -33,6 +33,15 @@
 #define METROPOLICE_USES_RESPONSE_SYSTEM 1
 #endif
 
+#ifdef EZ2
+enum WeaponSwapType
+{
+	WEAPON_SWAP_ANY = 0,
+	WEAPON_SWAP_MELEE,
+	WEAPON_SWAP_RANGED,
+};
+#endif
+
 class CNPC_MetroPolice;
 
 #ifdef MAPBASE
@@ -195,7 +204,7 @@ private:
 
 #ifdef EZ2
 	void		TryWeaponSwap();
-	int			FindWeaponToSwap(bool bMeleeWeapon);
+	int			FindWeaponToSwap(WeaponSwapType bWeaponSwapType);
 #endif
 
 	void		SetPlayerCriminalDuration( float time );

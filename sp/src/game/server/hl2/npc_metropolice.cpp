@@ -24,6 +24,11 @@
 #include "mapbase/GlobalStrings.h"
 #endif
 
+#ifdef EZ2
+#include "ez2/ez2_player.h"
+#include "ai_interactions.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -91,7 +96,6 @@ enum
 
 	METROPOLICE_CHATTER_RESPONSE_TYPE_COUNT = 2,
 };
-
 
 enum SpeechMemory_t
 {
@@ -653,7 +657,7 @@ void CNPC_MetroPolice::TryWeaponSwap(  )
 	int iWeaponIndex = -1;
 	if (GetActiveWeapon()->IsMeleeWeapon() && EnemyDistance( GetEnemy() ) > sk_metropolice_swap_ranged_distance.GetFloat())
 	{
-		iWeaponIndex = FindWeaponToSwap( false );
+		iWeaponIndex = FindWeaponToSwap( WEAPON_SWAP_RANGED );
 		if (iWeaponIndex == -1)
 			return;
 
@@ -666,7 +670,7 @@ void CNPC_MetroPolice::TryWeaponSwap(  )
 	}
 	else if (!GetActiveWeapon()->IsMeleeWeapon() && EnemyDistance( GetEnemy() ) < sk_metropolice_swap_melee_distance.GetFloat())
 	{
-		iWeaponIndex = FindWeaponToSwap( true );
+		iWeaponIndex = FindWeaponToSwap( WEAPON_SWAP_MELEE );
 		if (iWeaponIndex == -1)
 			return;
 
@@ -698,7 +702,7 @@ void CNPC_MetroPolice::TryWeaponSwap(  )
 }
 
 
-int CNPC_MetroPolice::FindWeaponToSwap( bool bMeleeWeapon )
+int CNPC_MetroPolice::FindWeaponToSwap( WeaponSwapType bWeaponSwapType )
 {
 	int iWeaponIndex = -1;
 
@@ -708,15 +712,19 @@ int CNPC_MetroPolice::FindWeaponToSwap( bool bMeleeWeapon )
 	{
 		if (m_hMyWeapons[i].Get() == NULL)
 			continue;
+
+		// Don't swap to active weapon
+		if (m_hMyWeapons[i].Get() == GetActiveWeapon())
+			continue;
 		
 		// If we are looking for a melee weapon, only return index if that weapon is marked as a melee weapon
-		if (bMeleeWeapon && m_hMyWeapons[i].Get()->IsMeleeWeapon())
+		if (bWeaponSwapType == WEAPON_SWAP_MELEE && m_hMyWeapons[i].Get()->IsMeleeWeapon())
 			return i;
-		else if (bMeleeWeapon)
+		else if (bWeaponSwapType == WEAPON_SWAP_MELEE)
 			continue;
 
 		// If we are looking for a ranged weapon and this is a melee weapon, keep looking
-		if (m_hMyWeapons[i].Get()->IsMeleeWeapon())
+		if (bWeaponSwapType == WEAPON_SWAP_RANGED && m_hMyWeapons[i].Get()->IsMeleeWeapon())
 			continue;
 
 		// If we are looking for a ranged weapon and we find a weapon that uses ammo and has ammo, return that one
@@ -3714,6 +3722,38 @@ bool CNPC_MetroPolice::HandleInteraction(int interactionType, void *data, CBaseC
 
 		return true;
 	}
+#ifdef EZ2
+	//else if (interactionType == g_interactionBadCopKick)
+	//{
+	//	KickInfo_t * pInfo = static_cast< KickInfo_t *>(data);
+
+	//	// Only continue if our damage filter allows us to
+	//	if (pInfo->dmgInfo && !PassesDamageFilter( *pInfo->dmgInfo ))
+	//		return false;
+
+	//	// Only continue if the kicker sees us as an enemy
+	//	if (pInfo->dmgInfo->GetAttacker() && pInfo->dmgInfo->GetAttacker()->MyCombatCharacterPointer()->IRelationType( this ) > D_FR)
+	//		return false;
+
+	//	// If we have directional information, see if this kick knocked a weapon free
+	//	trace_t * pTr = pInfo->tr;
+	//	CBaseCombatWeapon * pWeapon = GetActiveWeapon();
+	//	//if (pTr && pWeapon && FindWeaponToSwap( WEAPON_SWAP_ANY ) != -1)
+	//	{
+	//		Vector pWeaponPos = Weapon_ShootPosition();
+	//		const Vector weaponTarget = pWeaponPos + (pTr->endpos - pTr->startpos);
+	//		const Vector weaponVelocity = ((pTr->endpos - pTr->startpos) * 1024.0f);
+	//		Weapon_Drop( pWeapon, &weaponTarget, &weaponVelocity );
+	//	}
+
+	//	// Oof
+	//	SetCondition( COND_HEAVY_DAMAGE );
+	//	PlayFlinchGesture();
+
+	//	// Do normal kick handling
+	//	return false;
+	//}
+#endif
 
 	return BaseClass::HandleInteraction( interactionType, data, sourceEnt );
 }
@@ -4771,6 +4811,11 @@ bool CNPC_MetroPolice::IsHeavyDamage( const CTakeDamageInfo &info )
 	// Metropolice considers bullet fire heavy damage
 	if ( info.GetDamageType() & DMG_BULLET )
 		return true;
+
+#ifdef EZ2
+	if (info.GetDamageType() & DMG_CLUB)
+		return true;
+#endif	
 
 	return BaseClass::IsHeavyDamage( info );
 }
