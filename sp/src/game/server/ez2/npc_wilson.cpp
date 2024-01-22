@@ -153,6 +153,8 @@ BEGIN_DATADESC(CNPC_Wilson)
 	DEFINE_INPUTFUNC( FIELD_VOID, "TurnOnDeadMode", InputTurnOnDeadMode ),
 	DEFINE_INPUTFUNC( FIELD_VOID, "TurnOffDeadMode", InputTurnOffDeadMode ),
 
+	DEFINE_INPUTFUNC( FIELD_EHANDLE, "AttachToEntity", InputAttachToEntity ),
+
 	DEFINE_THINKFUNC( TeslaThink ),
 
 	DEFINE_OUTPUT( m_OnTipped, "OnTipped" ),
@@ -1153,6 +1155,85 @@ void CNPC_Wilson::SetPlayingDead( bool bPlayingDead )
 		SetEyeState( TURRET_EYE_DORMANT );
 		m_flTeslaStopTime = gpGlobals->curtime;
 	}
+}
+
+// Inspired by the carryable Wilson addon
+// https://steamcommunity.com/sharedfiles/filedetails/?id=2999509976
+void CNPC_Wilson::AttachToEntity(CBaseEntity* pAttachmentEntity)
+{
+	CBasePlayer* pPlayer;
+
+	AddEffects(EF_NOSHADOW);
+
+	SetAbsOrigin(pAttachmentEntity->GetAbsOrigin());
+	if (pAttachmentEntity->IsPlayer())
+	{
+		pPlayer = ToBasePlayer(pAttachmentEntity);
+		SetAbsAngles(pPlayer->EyeAngles());
+	}
+	else
+	{
+		SetAbsAngles(pAttachmentEntity->GetAbsAngles());
+	}
+
+	AddContext("suppress_tip:1");
+	AddContext("suppress_tip_react:1");
+	AddContext("suppress_fidget:1");
+	if (m_pMotionController != NULL)
+	{
+		m_pMotionController->Enable(false);
+	}
+
+	SetEyeState(TURRET_EYE_DEAD);
+	if (m_hEyeGlow != NULL)
+	{
+		UTIL_Remove(m_hEyeGlow);
+		m_hEyeGlow = NULL;
+	}
+
+	SetSolid(SOLID_NONE);
+	VPhysicsDestroyObject();
+	m_bStatic = true;
+	SetRenderMode(kRenderTransColor);
+	SetRenderColorA(0);
+	SetCollisionGroup(COLLISION_GROUP_NONE);
+	SetModelScale(0.0, 0.0);
+	m_bEyeLightEnabled = false;
+	m_bDisableFlashlight = true;
+	SetParent(pAttachmentEntity);
+	SetOwnerEntity(pAttachmentEntity);
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CNPC_Wilson::InputAttachToEntity(inputdata_t& inputdata)
+{
+	if (inputdata.value.Entity())
+	{
+		AttachToEntity(inputdata.value.Entity());
+	}
+	else
+	{
+		Warning("%s AttachToEntity: Entity not valid\n", GetDebugName());
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Override FInViewCone to ensure that an entity is seen if it is the parent
+//-----------------------------------------------------------------------------
+bool CNPC_Wilson::FInViewCone(CBaseEntity* pEntity)
+{
+	if (pEntity == NULL)
+		return false;
+
+	if (GetOwnerEntity() == pEntity)
+		return true;
+
+	if (GetParent() == pEntity)
+		return true;
+
+	return BaseClass::FInViewCone(pEntity);
 }
 
 //-----------------------------------------------------------------------------

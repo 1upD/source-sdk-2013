@@ -172,6 +172,8 @@ public:
 
 	void		SetDamaged( bool bDamaged );
 	void		SetPlayingDead( bool bPlayingDead );
+	
+	void		AttachToEntity( CBaseEntity* pAttachmentEntity);
 
 	void			InputTurnOnDamagedMode( inputdata_t &inputdata ) { SetDamaged( true ); }
 	void			InputTurnOffDamagedMode( inputdata_t &inputdata ) { SetDamaged( false ); }
@@ -179,6 +181,9 @@ public:
 	void			InputTurnOnDeadMode( inputdata_t &inputdata ) { SetPlayingDead( true ); }
 	void			InputTurnOffDeadMode( inputdata_t &inputdata ) { SetPlayingDead( false ); }
 
+	void			InputAttachToEntity(inputdata_t& inputdata);
+
+	bool			FInViewCone(CBaseEntity* pEntity);
 
 protected:
 	//-----------------------------------------------------
